@@ -6,8 +6,8 @@ import {
   clusterConsumerGroupsPath,
   clusterSchemasPath,
   clusterConnectorsPath,
-  clusterConnectsPath,
   clusterKsqlDbPath,
+  clusterACLPath,
 } from 'lib/paths';
 
 import ClusterMenuItem from './ClusterMenuItem';
@@ -23,14 +23,12 @@ const ClusterMenu: React.FC<Props> = ({
   cluster: { name, status, features },
   singleMode,
 }) => {
-  const hasFeatureConfigured = React.useCallback(
-    (key) => features?.includes(key),
-    [features]
-  );
+  const hasFeatureConfigured = (key: ClusterFeaturesEnum) =>
+    features?.includes(key);
   const [isOpen, setIsOpen] = React.useState(!!singleMode);
   return (
     <S.List>
-      <S.Divider />
+      <hr />
       <ClusterTab
         title={name}
         status={status}
@@ -45,7 +43,6 @@ const ClusterMenu: React.FC<Props> = ({
             to={clusterConsumerGroupsPath(name)}
             title="Consumers"
           />
-
           {hasFeatureConfigured(ClusterFeaturesEnum.SCHEMA_REGISTRY) && (
             <ClusterMenuItem
               to={clusterSchemasPath(name)}
@@ -56,14 +53,14 @@ const ClusterMenu: React.FC<Props> = ({
             <ClusterMenuItem
               to={clusterConnectorsPath(name)}
               title="Kafka Connect"
-              isActive={(_, location) =>
-                location.pathname.startsWith(clusterConnectsPath(name)) ||
-                location.pathname.startsWith(clusterConnectorsPath(name))
-              }
             />
           )}
           {hasFeatureConfigured(ClusterFeaturesEnum.KSQL_DB) && (
             <ClusterMenuItem to={clusterKsqlDbPath(name)} title="KSQL DB" />
+          )}
+          {(hasFeatureConfigured(ClusterFeaturesEnum.KAFKA_ACL_VIEW) ||
+            hasFeatureConfigured(ClusterFeaturesEnum.KAFKA_ACL_EDIT)) && (
+            <ClusterMenuItem to={clusterACLPath(name)} title="ACL" />
           )}
         </S.List>
       )}

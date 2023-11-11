@@ -1,110 +1,131 @@
 import React from 'react';
-import { mount } from 'enzyme';
-import { Provider } from 'react-redux';
-import { StaticRouter } from 'react-router-dom';
-import { store } from 'redux/store';
-import { connectors } from 'redux/reducers/connect/__test__/fixtures';
+import { connectors } from 'lib/fixtures/kafkaConnect';
 import ClusterContext, {
   ContextProps,
   initialValue,
 } from 'components/contexts/ClusterContext';
-import ListContainer from 'components/Connect/List/ListContainer';
-import List, { ListProps } from 'components/Connect/List/List';
-import { ThemeProvider } from 'styled-components';
-import theme from 'theme/theme';
+import List from 'components/Connect/List/List';
+import { screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { render, WithRoute } from 'lib/testHelpers';
+import { clusterConnectConnectorPath, clusterConnectorsPath } from 'lib/paths';
+import {
+  useConnectors,
+  useDeleteConnector,
+  useUpdateConnectorState,
+} from 'lib/hooks/api/kafkaConnect';
+
+const mockedUsedNavigate = jest.fn();
+const mockDelete = jest.fn();
+
+jest.mock('react-router-dom', () => ({
+  ...jest.requireActual('react-router-dom'),
+  useNavigate: () => mockedUsedNavigate,
+}));
+
+jest.mock('lib/hooks/api/kafkaConnect', () => ({
+  useConnectors: jest.fn(),
+  useDeleteConnector: jest.fn(),
+  useUpdateConnectorState: jest.fn(),
+}));
+
+const clusterName = 'local';
+
+const renderComponent = (contextValue: ContextProps = initialValue) =>
+  render(
+    <ClusterContext.Provider value={contextValue}>
+      <WithRoute path={clusterConnectorsPath()}>
+        <List />
+      </WithRoute>
+    </ClusterContext.Provider>,
+    { initialEntries: [clusterConnectorsPath(clusterName)] }
+  );
 
 describe('Connectors List', () => {
-  describe('Container', () => {
-    it('renders view with initial state of storage', () => {
-      const wrapper = mount(
-        <ThemeProvider theme={theme}>
-          <Provider store={store}>
-            <StaticRouter>
-              <ListContainer />
-            </StaticRouter>
-          </Provider>
-        </ThemeProvider>
-      );
+  describe('when the connectors are loaded', () => {
+    beforeEach(() => {
+      (useConnectors as jest.Mock).mockImplementation(() => ({
+        data: connectors,
+      }));
+      const restartConnector = jest.fn();
+      (useUpdateConnectorState as jest.Mock).mockImplementation(() => ({
+        mutateAsync: restartConnector,
+      }));
+    });
 
-      expect(wrapper.exists(List)).toBeTruthy();
+    it('renders', async () => {
+      renderComponent();
+      expect(screen.getByRole('table')).toBeInTheDocument();
+      expect(screen.getAllByRole('row').length).toEqual(3);
+    });
+
+    it('opens broker when row clicked', async () => {
+      renderComponent();
+      await userEvent.click(
+        screen.getByRole('row', {
+          name: 'hdfs-source-connector first SOURCE FileStreamSource a b c RUNNING 2 of 2',
+        })
+      );
+      await waitFor(() =>
+        expect(mockedUsedNavigate).toBeCalledWith(
+          clusterConnectConnectorPath(
+            clusterName,
+            'first',
+            'hdfs-source-connector'
+          )
+        )
+      );
     });
   });
 
-  describe('View', () => {
-    const fetchConnects = jest.fn();
-    const fetchConnectors = jest.fn();
-    const setConnectorSearch = jest.fn();
-    const setupComponent = (
-      props: Partial<ListProps> = {},
-      contextValue: ContextProps = initialValue
-    ) => (
-      <ThemeProvider theme={theme}>
-        <Provider store={store}>
-          <StaticRouter>
-            <ClusterContext.Provider value={contextValue}>
-              <List
-                areConnectorsFetching
-                areConnectsFetching
-                connectors={[]}
-                connects={[]}
-                fetchConnects={fetchConnects}
-                fetchConnectors={fetchConnectors}
-                search=""
-                setConnectorSearch={setConnectorSearch}
-                {...props}
-              />
-            </ClusterContext.Provider>
-          </StaticRouter>
-        </Provider>
-      </ThemeProvider>
-    );
-
-    it('renders PageLoader', () => {
-      const wrapper = mount(setupComponent({ areConnectorsFetching: true }));
-      expect(wrapper.exists('PageLoader')).toBeTruthy();
-      expect(wrapper.exists('table')).toBeFalsy();
+  describe('when table is empty', () => {
+    beforeEach(() => {
+      (useConnectors as jest.Mock).mockImplementation(() => ({
+        data: [],
+      }));
     });
 
-    it('renders table', () => {
-      const wrapper = mount(setupComponent({ areConnectorsFetching: false }));
-      expect(wrapper.exists('PageLoader')).toBeFalsy();
-      expect(wrapper.exists('table')).toBeTruthy();
+    it('renders empty table', async () => {
+      renderComponent();
+      expect(screen.getByRole('table')).toBeInTheDocument();
+      expect(
+        screen.getByRole('row', { name: 'No connectors found' })
+      ).toBeInTheDocument();
+    });
+  });
+
+  describe('when remove connector modal is open', () => {
+    beforeEach(() => {
+      (useConnectors as jest.Mock).mockImplementation(() => ({
+        data: connectors,
+      }));
+      (useDeleteConnector as jest.Mock).mockImplementation(() => ({
+        mutateAsync: mockDelete,
+      }));
     });
 
-    it('renders connectors list', () => {
-      const wrapper = mount(
-        setupComponent({
-          areConnectorsFetching: false,
-          connectors,
-        })
-      );
-      expect(wrapper.exists('PageLoader')).toBeFalsy();
-      expect(wrapper.exists('table')).toBeTruthy();
-      expect(wrapper.find('ListItem').length).toEqual(2);
+    it('calls removeConnector on confirm', async () => {
+      renderComponent();
+      const removeButton = screen.getAllByText('Remove Connector')[0];
+      await waitFor(() => userEvent.click(removeButton));
+
+      const submitButton = screen.getAllByRole('button', {
+        name: 'Confirm',
+      })[0];
+      await userEvent.click(submitButton);
+      expect(mockDelete).toHaveBeenCalledWith();
     });
 
-    it('handles fetchConnects and fetchConnectors', () => {
-      mount(setupComponent());
-      expect(fetchConnects).toHaveBeenCalledTimes(1);
-      expect(fetchConnectors).toHaveBeenCalledTimes(1);
-    });
+    it('closes the modal when cancel button is clicked', async () => {
+      renderComponent();
+      const removeButton = screen.getAllByText('Remove Connector')[0];
+      await waitFor(() => userEvent.click(removeButton));
 
-    it('renders actions if cluster is not readonly', () => {
-      const wrapper = mount(
-        setupComponent({}, { ...initialValue, isReadOnly: false })
-      );
-      expect(wrapper.exists('button')).toBeTruthy();
-    });
-
-    describe('readonly cluster', () => {
-      it('does not render actions if cluster is readonly', () => {
-        const wrapper = mount(
-          setupComponent({}, { ...initialValue, isReadOnly: true })
-        );
-        expect(
-          wrapper.exists('.level-item.level-right > .button.is-primary')
-        ).toBeFalsy();
-      });
+      const cancelButton = screen.getAllByRole('button', {
+        name: 'Cancel',
+      })[0];
+      await waitFor(() => userEvent.click(cancelButton));
+      expect(cancelButton).not.toBeInTheDocument();
     });
   });
 });

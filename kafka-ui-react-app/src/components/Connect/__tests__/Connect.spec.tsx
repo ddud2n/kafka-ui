@@ -1,63 +1,61 @@
 import React from 'react';
-import { render } from 'lib/testHelpers';
+import { render, WithRoute } from 'lib/testHelpers';
 import { screen } from '@testing-library/react';
 import Connect from 'components/Connect/Connect';
-import { store } from 'redux/store';
-import { Route } from 'react-router-dom';
 import {
   clusterConnectorsPath,
   clusterConnectorNewPath,
   clusterConnectConnectorPath,
-  clusterConnectConnectorEditPath,
+  getNonExactPath,
+  clusterConnectsPath,
 } from 'lib/paths';
 
-jest.mock('components/Connect/New/NewContainer', () => () => (
-  <div>NewContainer</div>
+const ConnectCompText = {
+  new: 'New Page',
+  list: 'List Page',
+  details: 'Details Page',
+};
+
+jest.mock('components/Connect/New/New', () => () => (
+  <div>{ConnectCompText.new}</div>
 ));
-jest.mock('components/Connect/List/ListContainer', () => () => (
-  <div>ListContainer</div>
+jest.mock('components/Connect/List/ListPage', () => () => (
+  <div>{ConnectCompText.list}</div>
 ));
-jest.mock('components/Connect/Details/DetailsContainer', () => () => (
-  <div>DetailsContainer</div>
-));
-jest.mock('components/Connect/Edit/EditContainer', () => () => (
-  <div>EditContainer</div>
+jest.mock('components/Connect/Details/DetailsPage', () => () => (
+  <div>{ConnectCompText.details}</div>
 ));
 
 describe('Connect', () => {
-  const renderComponent = (pathname: string) =>
+  const renderComponent = (pathname: string, routePath: string) =>
     render(
-      <Route path="/ui/clusters/:clusterName">
+      <WithRoute path={getNonExactPath(routePath)}>
         <Connect />
-      </Route>,
-      { pathname, store }
+      </WithRoute>,
+      { initialEntries: [pathname] }
     );
 
-  it('renders ListContainer', () => {
-    renderComponent(clusterConnectorsPath('my-cluster'));
-    expect(screen.getByText('ListContainer')).toBeInTheDocument();
-  });
-
-  it('renders NewContainer', () => {
-    renderComponent(clusterConnectorNewPath('my-cluster'));
-    expect(screen.getByText('NewContainer')).toBeInTheDocument();
-  });
-
-  it('renders DetailsContainer', () => {
+  it('renders ListPage', () => {
     renderComponent(
-      clusterConnectConnectorPath('my-cluster', 'my-connect', 'my-connector')
+      clusterConnectorsPath('my-cluster'),
+      clusterConnectorsPath()
     );
-    expect(screen.getByText('DetailsContainer')).toBeInTheDocument();
+    expect(screen.getByText(ConnectCompText.list)).toBeInTheDocument();
   });
 
-  it('renders EditContainer', () => {
+  it('renders New Page', () => {
     renderComponent(
-      clusterConnectConnectorEditPath(
-        'my-cluster',
-        'my-connect',
-        'my-connector'
-      )
+      clusterConnectorNewPath('my-cluster'),
+      clusterConnectorsPath()
     );
-    expect(screen.getByText('EditContainer')).toBeInTheDocument();
+    expect(screen.getByText(ConnectCompText.new)).toBeInTheDocument();
+  });
+
+  it('renders Details Page', () => {
+    renderComponent(
+      clusterConnectConnectorPath('my-cluster', 'my-connect', 'my-connector'),
+      clusterConnectsPath()
+    );
+    expect(screen.getByText(ConnectCompText.details)).toBeInTheDocument();
   });
 });

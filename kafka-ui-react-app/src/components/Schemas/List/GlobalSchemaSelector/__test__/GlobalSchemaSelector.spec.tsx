@@ -1,20 +1,19 @@
 import React from 'react';
-import { screen, waitFor, within } from '@testing-library/react';
-import { render } from 'lib/testHelpers';
+import { act, screen, waitFor, within } from '@testing-library/react';
+import { render, WithRoute } from 'lib/testHelpers';
 import { CompatibilityLevelCompatibilityEnum } from 'generated-sources';
 import GlobalSchemaSelector from 'components/Schemas/List/GlobalSchemaSelector/GlobalSchemaSelector';
 import userEvent from '@testing-library/user-event';
 import { clusterSchemasPath } from 'lib/paths';
-import { Route } from 'react-router';
 import fetchMock from 'fetch-mock';
 
 const clusterName = 'testClusterName';
 
-const selectForwardOption = () => {
+const selectForwardOption = async () => {
   const dropdownElement = screen.getByRole('listbox');
   // clicks to open dropdown
-  userEvent.click(within(dropdownElement).getByRole('option'));
-  userEvent.click(
+  await userEvent.click(within(dropdownElement).getByRole('option'));
+  await userEvent.click(
     screen.getByText(CompatibilityLevelCompatibilityEnum.FORWARD)
   );
 };
@@ -29,11 +28,11 @@ const expectOptionIsSelected = (option: string) => {
 describe('GlobalSchemaSelector', () => {
   const renderComponent = () =>
     render(
-      <Route path={clusterSchemasPath(':clusterName')}>
+      <WithRoute path={clusterSchemasPath()}>
         <GlobalSchemaSelector />
-      </Route>,
+      </WithRoute>,
       {
-        pathname: clusterSchemasPath(clusterName),
+        initialEntries: [clusterSchemasPath(clusterName)],
       }
     );
 
@@ -42,7 +41,9 @@ describe('GlobalSchemaSelector', () => {
       `api/clusters/${clusterName}/schemas/compatibility`,
       { compatibility: CompatibilityLevelCompatibilityEnum.FULL }
     );
-    renderComponent();
+    await act(() => {
+      renderComponent();
+    });
     await waitFor(() =>
       expect(fetchGlobalCompatibilityLevelMock.called()).toBeTruthy()
     );
@@ -58,19 +59,19 @@ describe('GlobalSchemaSelector', () => {
 
   it('shows popup when select value is changed', async () => {
     expectOptionIsSelected(CompatibilityLevelCompatibilityEnum.FULL);
-    selectForwardOption();
+    await selectForwardOption();
     expect(screen.getByText('Confirm the action')).toBeInTheDocument();
   });
 
-  it('resets select value when cancel is clicked', () => {
-    selectForwardOption();
-    userEvent.click(screen.getByText('Cancel'));
+  it('resets select value when cancel is clicked', async () => {
+    await selectForwardOption();
+    await userEvent.click(screen.getByText('Cancel'));
     expect(screen.queryByText('Confirm the action')).not.toBeInTheDocument();
     expectOptionIsSelected(CompatibilityLevelCompatibilityEnum.FULL);
   });
 
   it('sets new schema when confirm is clicked', async () => {
-    selectForwardOption();
+    await selectForwardOption();
     const putNewCompatibilityMock = fetchMock.putOnce(
       `api/clusters/${clusterName}/schemas/compatibility`,
       200,
@@ -81,15 +82,21 @@ describe('GlobalSchemaSelector', () => {
       }
     );
     const getSchemasMock = fetchMock.getOnce(
-      `api/clusters/${clusterName}/schemas`,
+      `api/clusters/${clusterName}/schemas?page=1&perPage=25`,
       200
     );
     await waitFor(() => {
-      userEvent.click(screen.getByText('Submit'));
+      userEvent.click(screen.getByRole('button', { name: 'Confirm' }));
     });
     await waitFor(() => expect(putNewCompatibilityMock.called()).toBeTruthy());
     await waitFor(() => expect(getSchemasMock.called()).toBeTruthy());
-    expect(screen.queryByText('Confirm the action')).not.toBeInTheDocument();
-    expectOptionIsSelected(CompatibilityLevelCompatibilityEnum.FORWARD);
+
+    await waitFor(() =>
+      expect(screen.queryByText('Confirm the action')).not.toBeInTheDocument()
+    );
+
+    await waitFor(() =>
+      expectOptionIsSelected(CompatibilityLevelCompatibilityEnum.FORWARD)
+    );
   });
 });

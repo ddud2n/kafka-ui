@@ -1,14 +1,18 @@
 import { store } from 'redux/store';
 import * as selectors from 'redux/reducers/topicMessages/selectors';
-import { initialState } from 'redux/reducers/topicMessages/reducer';
 import {
+  initialState,
   addTopicMessage,
   updateTopicMessagesMeta,
   updateTopicMessagesPhase,
-} from 'redux/actions';
+} from 'redux/reducers/topicMessages/topicMessagesSlice';
 
 import { topicMessagePayload, topicMessagesMetaPayload } from './fixtures';
 
+const newTopicMessagePayload = {
+  ...topicMessagePayload,
+  timestamp: topicMessagePayload.timestamp.toString(),
+};
 describe('TopicMessages selectors', () => {
   describe('Initial state', () => {
     it('returns empty message array', () => {
@@ -28,14 +32,18 @@ describe('TopicMessages selectors', () => {
 
   describe('state', () => {
     beforeAll(() => {
-      store.dispatch(addTopicMessage({ message: topicMessagePayload }));
+      store.dispatch(
+        addTopicMessage({
+          message: newTopicMessagePayload,
+        })
+      );
       store.dispatch(updateTopicMessagesPhase('consuming'));
       store.dispatch(updateTopicMessagesMeta(topicMessagesMetaPayload));
     });
 
     it('returns messages', () => {
       expect(selectors.getTopicMessges(store.getState())).toEqual([
-        topicMessagePayload,
+        newTopicMessagePayload,
       ]);
     });
 

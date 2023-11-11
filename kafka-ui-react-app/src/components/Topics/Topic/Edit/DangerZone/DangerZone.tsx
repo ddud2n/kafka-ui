@@ -1,53 +1,36 @@
 import { ErrorMessage } from '@hookform/error-message';
 import { Button } from 'components/common/Button/Button';
-import ConfirmationModal from 'components/common/ConfirmationModal/ConfirmationModal';
 import Input from 'components/common/Input/Input';
 import { FormError } from 'components/common/Input/Input.styled';
 import { InputLabel } from 'components/common/Input/InputLabel.styled';
 import React from 'react';
 import { FormProvider, useForm } from 'react-hook-form';
+import { RouteParamsClusterTopic } from 'lib/paths';
+import useAppParams from 'lib/hooks/useAppParams';
+import { useConfirm } from 'lib/hooks/useConfirm';
+import {
+  useIncreaseTopicPartitionsCount,
+  useUpdateTopicReplicationFactor,
+} from 'lib/hooks/api/topics';
 
 import * as S from './DangerZone.styled';
 
-export interface Props {
-  clusterName: string;
-  topicName: string;
+export interface DangerZoneProps {
   defaultPartitions: number;
   defaultReplicationFactor: number;
-  partitionsCountIncreased: boolean;
-  replicationFactorUpdated: boolean;
-  updateTopicPartitionsCount: (
-    clusterName: string,
-    topicname: string,
-    partitions: number
-  ) => void;
-  updateTopicReplicationFactor: (
-    clusterName: string,
-    topicname: string,
-    replicationFactor: number
-  ) => void;
 }
 
-const DangerZone: React.FC<Props> = ({
-  clusterName,
-  topicName,
+const DangerZone: React.FC<DangerZoneProps> = ({
   defaultPartitions,
   defaultReplicationFactor,
-  partitionsCountIncreased,
-  replicationFactorUpdated,
-  updateTopicPartitionsCount,
-  updateTopicReplicationFactor,
 }) => {
-  const [isPartitionsConfirmationVisible, setIsPartitionsConfirmationVisible] =
-    React.useState<boolean>(false);
-  const [
-    isReplicationFactorConfirmationVisible,
-    setIsReplicationFactorConfirmationVisible,
-  ] = React.useState<boolean>(false);
+  const params = useAppParams<RouteParamsClusterTopic>();
   const [partitions, setPartitions] = React.useState<number>(defaultPartitions);
   const [replicationFactor, setReplicationFactor] = React.useState<number>(
     defaultReplicationFactor
   );
+  const increaseTopicPartitionsCount = useIncreaseTopicPartitionsCount(params);
+  const updateTopicReplicationFactor = useUpdateTopicReplicationFactor(params);
 
   const partitionsMethods = useForm({
     defaultValues: {
@@ -61,6 +44,23 @@ const DangerZone: React.FC<Props> = ({
     },
   });
 
+  const confirm = useConfirm();
+  const confirmPartitionsChange = () =>
+    confirm(
+      `Are you sure you want to increase the number of partitions?
+        Do it only if you 100% know what you are doing!`,
+      () =>
+        increaseTopicPartitionsCount.mutateAsync(
+          partitionsMethods.getValues('partitions')
+        )
+    );
+  const confirmReplicationFactorChange = () =>
+    confirm('Are you sure you want to update the replication factor?', () =>
+      updateTopicReplicationFactor.mutateAsync(
+        replicationFactorMethods.getValues('replicationFactor')
+      )
+    );
+
   const validatePartitions = (data: { partitions: number }) => {
     if (data.partitions < defaultPartitions) {
       partitionsMethods.setError('partitions', {
@@ -69,44 +69,26 @@ const DangerZone: React.FC<Props> = ({
       });
     } else {
       setPartitions(data.partitions);
-      setIsPartitionsConfirmationVisible(true);
+      confirmPartitionsChange();
     }
   };
 
   const validateReplicationFactor = (data: { replicationFactor: number }) => {
-    setReplicationFactor(data.replicationFactor);
-    setIsReplicationFactorConfirmationVisible(true);
-  };
-
-  React.useEffect(() => {
-    if (partitionsCountIncreased) {
-      setIsPartitionsConfirmationVisible(false);
+    try {
+      setReplicationFactor(data.replicationFactor);
+      confirmReplicationFactorChange();
+    } catch (e) {
+      // do nothing
     }
-  }, [partitionsCountIncreased]);
-
-  React.useEffect(() => {
-    if (replicationFactorUpdated) {
-      setIsReplicationFactorConfirmationVisible(false);
-    }
-  }, [replicationFactorUpdated]);
-
-  const partitionsSubmit = () => {
-    updateTopicPartitionsCount(
-      clusterName,
-      topicName,
-      partitionsMethods.getValues('partitions')
-    );
   };
-  const replicationFactorSubmit = () => {
-    updateTopicReplicationFactor(
-      clusterName,
-      topicName,
-      replicationFactorMethods.getValues('replicationFactor')
-    );
-  };
+
   return (
     <S.Wrapper>
       <S.Title>Danger Zone</S.Title>
+      <S.Warning>
+        Change these parameters only if you are absolutely sure what you are
+        doing.
+      </S.Warning>
       <div>
         <FormProvider {...partitionsMethods}>
           <S.Form
@@ -146,15 +128,6 @@ const DangerZone: React.FC<Props> = ({
             name="partitions"
           />
         </FormError>
-        <ConfirmationModal
-          isOpen={isPartitionsConfirmationVisible}
-          onCancel={() => setIsPartitionsConfirmationVisible(false)}
-          onConfirm={partitionsSubmit}
-        >
-          Are you sure you want to increase the number of partitions? Do it only
-          if you 100% know what you are doing!
-        </ConfirmationModal>
-
         <FormProvider {...replicationFactorMethods}>
           <S.Form
             onSubmit={replicationFactorMethods.handleSubmit(
@@ -168,6 +141,7 @@ const DangerZone: React.FC<Props> = ({
               </InputLabel>
               <Input
                 id="replicationFactor"
+                inputSize="M"
                 type="number"
                 placeholder="Replication Factor"
                 name="replicationFactor"
@@ -188,20 +162,12 @@ const DangerZone: React.FC<Props> = ({
             </div>
           </S.Form>
         </FormProvider>
-
         <FormError>
           <ErrorMessage
             errors={replicationFactorMethods.formState.errors}
             name="replicationFactor"
           />
         </FormError>
-        <ConfirmationModal
-          isOpen={isReplicationFactorConfirmationVisible}
-          onCancel={() => setIsReplicationFactorConfirmationVisible(false)}
-          onConfirm={replicationFactorSubmit}
-        >
-          Are you sure you want to update the replication factor?
-        </ConfirmationModal>
       </div>
     </S.Wrapper>
   );

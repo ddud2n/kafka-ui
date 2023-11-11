@@ -1,5 +1,4 @@
 import styled, { css } from 'styled-components';
-import { AlertType } from 'redux/interfaces';
 
 export const Wrapper = styled.div`
   padding: 1.5rem 1rem;
@@ -11,7 +10,7 @@ export const Wrapper = styled.div`
 `;
 
 export const IndicatorWrapper = styled.div`
-  background-color: ${({ theme }) => theme.metrics.indicator.backgroundColor};
+  background-color: ${({ theme }) => theme.default.backgroundColor};
   height: 68px;
   width: fit-content;
   min-width: 150px;
@@ -21,8 +20,8 @@ export const IndicatorWrapper = styled.div`
   align-items: flex-start;
   padding: 12px 16px;
   box-shadow: 3px 3px 3px rgba(0, 0, 0, 0.08);
-  margin: 0 0 3px 0;
   flex-grow: 1;
+  color: ${({ theme }) => theme.default.color.normal};
 `;
 
 export const IndicatorTitle = styled.div`
@@ -38,33 +37,17 @@ export const IndicatorsWrapper = styled.div`
   display: flex;
   gap: 2px;
   flex-wrap: wrap;
-
-  > ${IndicatorWrapper} {
-    &:first-child {
-      border-top-left-radius: 8px;
-      border-bottom-left-radius: 8px;
-    }
-
-    &:last-child {
-      border-top-right-radius: 8px;
-      border-bottom-right-radius: 8px;
-    }
-  }
-
-  @media screen and (max-width: 1023px) {
-    > ${IndicatorWrapper} {
-      &:first-child,
-      &:last-child {
-        border-radius: 0;
-      }
-    }
-  }
+  border-radius: 8px;
+  overflow: auto;
+  box-shadow: 3px 3px 3px rgba(0, 0, 0, 0.08);
+  color: ${({ theme }) => theme.metrics.wrapper};
 `;
 
 export const SectionTitle = styled.h5`
   font-weight: 500;
-  margin: 0 0 0.5rem 0;
+  margin: 0 0 0.5rem 16px;
   font-size: 100%;
+  color: ${({ theme }) => theme.metrics.sectionTitle};
 `;
 
 export const LightText = styled.span`
@@ -94,7 +77,7 @@ export const CircularAlert = styled.circle.attrs({
   cy: 2,
   r: 2,
 })<{
-  $type: AlertType;
+  $type: 'error' | 'success' | 'warning' | 'info';
 }>(
   ({ theme, $type }) => css`
     fill: ${theme.circularAlert.color[$type]};

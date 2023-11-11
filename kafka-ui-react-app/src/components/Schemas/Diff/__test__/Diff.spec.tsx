@@ -1,40 +1,55 @@
 import React from 'react';
-import { Provider } from 'react-redux';
-import configureStore from 'redux-mock-store';
-import { StaticRouter } from 'react-router';
 import Diff, { DiffProps } from 'components/Schemas/Diff/Diff';
-import { render } from 'lib/testHelpers';
+import { render, WithRoute } from 'lib/testHelpers';
 import { screen } from '@testing-library/react';
-import thunk from 'redux-thunk';
+import { clusterSchemaComparePath } from 'lib/paths';
+import userEvent from '@testing-library/user-event';
 
 import { versions } from './fixtures';
 
-const middlewares = [thunk];
-const mockStore = configureStore(middlewares);
+const defaultClusterName = 'defaultClusterName';
+const defaultSubject = 'defaultSubject';
+const defaultPathName = clusterSchemaComparePath(
+  defaultClusterName,
+  defaultSubject
+);
 
 describe('Diff', () => {
-  const initialState: Partial<DiffProps> = {};
-  const store = mockStore(initialState);
+  const setupComponent = (
+    props: DiffProps,
+    searchQuery: { rightVersion?: string; leftVersion?: string } = {}
+  ) => {
+    let pathname = defaultPathName;
+    const searchParams = new URLSearchParams(pathname);
+    if (searchQuery.rightVersion) {
+      searchParams.set('rightVersion', searchQuery.rightVersion);
+    }
+    if (searchQuery.leftVersion) {
+      searchParams.set('leftVersion', searchQuery.leftVersion);
+    }
 
-  const setupComponent = (props: DiffProps) =>
-    render(
-      <Provider store={store}>
-        <StaticRouter>
-          <Diff
-            versions={props.versions}
-            leftVersionInPath={props.leftVersionInPath}
-            rightVersionInPath={props.rightVersionInPath}
-            areVersionsFetched={props.areVersionsFetched}
-          />
-        </StaticRouter>
-      </Provider>
+    pathname = `${pathname}?${searchParams.toString()}`;
+
+    return render(
+      <WithRoute path={clusterSchemaComparePath()}>
+        <Diff
+          versions={props.versions}
+          areVersionsFetched={props.areVersionsFetched}
+        />
+      </WithRoute>,
+      {
+        initialEntries: [pathname],
+      }
     );
+  };
+
   describe('Container', () => {
     it('renders view', () => {
       setupComponent({
         areVersionsFetched: true,
         versions,
       });
+      expect(screen.getAllByText('Version 3').length).toEqual(4);
     });
   });
 
@@ -65,8 +80,7 @@ describe('Diff', () => {
     });
 
     it('renders all options', () => {
-      const selectedOption = screen.getAllByRole('option');
-      expect(selectedOption.length).toEqual(2);
+      expect(screen.getAllByRole('option').length).toEqual(2);
     });
     it('renders left select with empty value', () => {
       const select = screen.getAllByRole('listbox')[0];
@@ -82,12 +96,13 @@ describe('Diff', () => {
   });
   describe('when schema versions are loaded and two versions in path', () => {
     beforeEach(() => {
-      setupComponent({
-        areVersionsFetched: true,
-        versions,
-        leftVersionInPath: '1',
-        rightVersionInPath: '2',
-      });
+      setupComponent(
+        {
+          areVersionsFetched: true,
+          versions,
+        },
+        { leftVersion: '1', rightVersion: '2' }
+      );
     });
 
     it('renders left select with version 1', () => {
@@ -105,11 +120,15 @@ describe('Diff', () => {
 
   describe('when schema versions are loaded and only one versions in path', () => {
     beforeEach(() => {
-      setupComponent({
-        areVersionsFetched: true,
-        versions,
-        leftVersionInPath: '1',
-      });
+      setupComponent(
+        {
+          areVersionsFetched: true,
+          versions,
+        },
+        {
+          leftVersion: '1',
+        }
+      );
     });
 
     it('renders left select with version 1', () => {
@@ -122,6 +141,26 @@ describe('Diff', () => {
       const select = screen.getAllByRole('listbox')[1];
       expect(select).toBeInTheDocument();
       expect(select).toHaveTextContent(versions[0].version);
+    });
+  });
+
+  describe('Back button', () => {
+    beforeEach(() => {
+      setupComponent({
+        areVersionsFetched: true,
+        versions,
+      });
+    });
+
+    it('back button is appear', () => {
+      const backButton = screen.getAllByRole('button', { name: 'Back' });
+      expect(backButton[0]).toBeInTheDocument();
+    });
+
+    it('click on back button', () => {
+      const backButton = screen.getAllByRole('button', { name: 'Back' });
+      userEvent.click(backButton[0]);
+      expect(screen.queryByRole('Back')).not.toBeInTheDocument();
     });
   });
 });

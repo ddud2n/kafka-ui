@@ -1,4 +1,5 @@
 import { diff as DiffEditor } from 'react-ace';
+import 'ace-builds/src-noconflict/ace';
 import 'ace-builds/src-noconflict/mode-json5';
 import 'ace-builds/src-noconflict/mode-protobuf';
 import 'ace-builds/src-noconflict/theme-textmate';
@@ -22,7 +23,7 @@ const DiffViewer = React.forwardRef<DiffEditor | null, DiffViewerProps>(
           ) * 16
         : 500;
     return (
-      <div data-testid="diffviewer">
+      <div>
         <DiffEditor
           name="diff-editor"
           ref={ref}

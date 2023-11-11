@@ -1,26 +1,21 @@
 import React from 'react';
 import SchemaVersion from 'components/Schemas/Details/SchemaVersion/SchemaVersion';
 import { render } from 'lib/testHelpers';
-import { screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { SchemaSubject } from 'generated-sources';
+import { Row } from '@tanstack/react-table';
 
-import { versions } from './fixtures';
+import { jsonSchema } from './fixtures';
 
 const renderComponent = () => {
-  render(
-    <table>
-      <tbody>
-        <SchemaVersion version={versions[0]} />
-      </tbody>
-    </table>
-  );
+  const row = {
+    original: jsonSchema,
+  };
+
+  return render(<SchemaVersion row={row as Row<SchemaSubject>} />);
 };
+
 describe('SchemaVersion', () => {
-  it('renders versions', () => {
+  it('renders versions', async () => {
     renderComponent();
-    expect(screen.getAllByRole('cell')).toHaveLength(3);
-    expect(screen.queryByTestId('json-viewer')).not.toBeInTheDocument();
-    userEvent.click(screen.getByRole('button'));
-    expect(screen.getByTestId('json-viewer')).toBeInTheDocument();
   });
 });

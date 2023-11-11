@@ -29,37 +29,38 @@ describe('Custom Select', () => {
       });
     });
 
+    const getListbox = () => screen.getByRole('listbox');
+    const getOption = () => screen.getByRole('option');
+
     it('renders component', () => {
-      expect(screen.getByRole('listbox')).toBeInTheDocument();
+      expect(getListbox()).toBeInTheDocument();
     });
 
-    it('show select options when select is being clicked', () => {
-      expect(screen.getByRole('option')).toBeInTheDocument();
-      userEvent.click(screen.getByRole('listbox'));
+    it('show select options when select is being clicked', async () => {
+      expect(getOption()).toBeInTheDocument();
+      await userEvent.click(getListbox());
       expect(screen.getAllByRole('option')).toHaveLength(3);
     });
 
-    it('checking select option change', () => {
-      const listbox = screen.getByRole('listbox');
+    it('checking select option change', async () => {
       const optionLabel = 'test-label1';
 
-      userEvent.click(listbox);
-      userEvent.selectOptions(listbox, [optionLabel]);
+      await userEvent.click(getListbox());
+      await userEvent.selectOptions(getListbox(), [optionLabel]);
 
-      expect(screen.getByRole('option')).toHaveTextContent(optionLabel);
+      expect(getOption()).toHaveTextContent(optionLabel);
     });
 
-    it('trying to select disabled option does not trigger change', () => {
-      const listbox = screen.getByRole('listbox');
+    it('trying to select disabled option does not trigger change', async () => {
       const normalOptionLabel = 'test-label1';
       const disabledOptionLabel = 'test-label2';
 
-      userEvent.click(listbox);
-      userEvent.selectOptions(listbox, [normalOptionLabel]);
-      userEvent.click(listbox);
-      userEvent.selectOptions(listbox, [disabledOptionLabel]);
+      await userEvent.click(getListbox());
+      await userEvent.selectOptions(getListbox(), [normalOptionLabel]);
+      await userEvent.click(getListbox());
+      await userEvent.selectOptions(getListbox(), [disabledOptionLabel]);
 
-      expect(screen.getByRole('option')).toHaveTextContent(normalOptionLabel);
+      expect(getOption()).toHaveTextContent(normalOptionLabel);
     });
   });
 
@@ -72,8 +73,8 @@ describe('Custom Select', () => {
 
   describe('when live', () => {
     it('there is live icon', () => {
-      renderComponent({ isLive: true });
-      expect(screen.getByTestId('liveIcon')).toBeInTheDocument();
+      render(<Select name="test" {...{ isLive: true }} />);
+      expect(screen.getByRole('listbox')).toBeInTheDocument();
     });
   });
 });

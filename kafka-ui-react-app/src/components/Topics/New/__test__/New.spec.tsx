@@ -1,12 +1,7 @@
 import React from 'react';
 import New from 'components/Topics/New/New';
-import { Route, Router } from 'react-router';
-import configureStore from 'redux-mock-store';
-import { RootState } from 'redux/interfaces';
-import { Provider } from 'react-redux';
-import { screen, waitFor } from '@testing-library/react';
-import { createMemoryHistory } from 'history';
-import fetchMock from 'fetch-mock-jest';
+import { Route, Routes } from 'react-router-dom';
+import { act, screen } from '@testing-library/react';
 import {
   clusterTopicCopyPath,
   clusterTopicNewPath,
@@ -14,112 +9,91 @@ import {
 } from 'lib/paths';
 import userEvent from '@testing-library/user-event';
 import { render } from 'lib/testHelpers';
-
-import { createTopicPayload, createTopicResponsePayload } from './fixtures';
-
-const mockStore = configureStore();
+import { useCreateTopic } from 'lib/hooks/api/topics';
 
 const clusterName = 'local';
 const topicName = 'test-topic';
+const minValue = '1';
 
-const initialState: Partial<RootState> = {};
-const storeMock = mockStore(initialState);
-const historyMock = createMemoryHistory();
-const createTopicAPIPath = `/api/clusters/${clusterName}/topics`;
+const mockNavigate = jest.fn();
+jest.mock('react-router-dom', () => ({
+  ...jest.requireActual('react-router-dom'),
+  useNavigate: () => mockNavigate,
+}));
+jest.mock('lib/hooks/api/topics', () => ({
+  useCreateTopic: jest.fn(),
+}));
 
-const renderComponent = (history = historyMock, store = storeMock) =>
+const renderComponent = (path: string) => {
   render(
-    <Router history={history}>
-      <Route path={clusterTopicNewPath(':clusterName')}>
-        <Provider store={store}>
-          <New />
-        </Provider>
-      </Route>
-      <Route path={clusterTopicCopyPath(':clusterName')}>
-        <Provider store={store}>
-          <New />
-        </Provider>
-      </Route>
-      <Route path={clusterTopicPath(':clusterName', ':topicName')}>
-        New topic path
-      </Route>
-    </Router>
+    <Routes>
+      <Route path={clusterTopicNewPath()} element={<New />} />
+      <Route path={clusterTopicCopyPath()} element={<New />} />
+      <Route path={clusterTopicPath()} element="New topic path" />
+    </Routes>,
+    { initialEntries: [path] }
   );
-
+};
+const createTopicMock = jest.fn();
 describe('New', () => {
   beforeEach(() => {
-    fetchMock.reset();
+    (useCreateTopic as jest.Mock).mockImplementation(() => ({
+      createResource: createTopicMock,
+    }));
   });
-
   it('checks header for create new', async () => {
-    const mockedHistory = createMemoryHistory({
-      initialEntries: [clusterTopicNewPath(clusterName)],
+    await act(() => {
+      renderComponent(clusterTopicNewPath(clusterName));
     });
-    renderComponent(mockedHistory);
-    expect(
-      screen.getByRole('heading', { name: 'Create new Topic' })
-    ).toHaveTextContent('Create new Topic');
+    expect(screen.getByRole('heading', { name: 'Create' })).toBeInTheDocument();
   });
 
   it('checks header for copy', async () => {
-    const mockedHistory = createMemoryHistory({
-      initialEntries: [
-        {
-          pathname: clusterTopicCopyPath(clusterName),
-          search: `?name=test`,
-        },
-      ],
+    await act(() => {
+      renderComponent(`${clusterTopicCopyPath(clusterName)}?name=test`);
     });
-
-    renderComponent(mockedHistory);
-    expect(
-      screen.getByRole('heading', { name: 'Copy Topic' })
-    ).toHaveTextContent('Copy Topic');
+    expect(screen.getByRole('heading', { name: 'Copy' })).toBeInTheDocument();
   });
-
   it('validates form', async () => {
-    const mockedHistory = createMemoryHistory({
-      initialEntries: [clusterTopicNewPath(clusterName)],
-    });
-    jest.spyOn(mockedHistory, 'push');
-    renderComponent(mockedHistory);
+    renderComponent(clusterTopicNewPath(clusterName));
+    await userEvent.type(screen.getByPlaceholderText('Topic Name'), topicName);
+    await userEvent.clear(screen.getByPlaceholderText('Topic Name'));
+    await userEvent.tab();
+    await expect(
+      screen.getByText('Topic Name is required')
+    ).toBeInTheDocument();
+    await userEvent.type(
+      screen.getByLabelText('Number of Partitions *'),
+      minValue
+    );
+    await userEvent.clear(screen.getByLabelText('Number of Partitions *'));
+    await userEvent.tab();
+    await expect(
+      screen.getByText('Number of Partitions is required and must be a number')
+    ).toBeInTheDocument();
 
-    await waitFor(() => {
-      userEvent.click(screen.getByText(/submit/i));
-    });
-    await waitFor(() => {
-      expect(screen.getByText('name is a required field')).toBeInTheDocument();
-    });
-    await waitFor(() => {
-      expect(mockedHistory.push).toBeCalledTimes(0);
-    });
+    expect(createTopicMock).not.toHaveBeenCalled();
+    expect(mockNavigate).not.toHaveBeenCalled();
   });
-
+  it('validates form invalid name', async () => {
+    renderComponent(clusterTopicNewPath(clusterName));
+    await userEvent.type(
+      screen.getByPlaceholderText('Topic Name'),
+      'Invalid,Name'
+    );
+    expect(
+      screen.getByText('Only alphanumeric, _, -, and . allowed')
+    ).toBeInTheDocument();
+  });
   it('submits valid form', async () => {
-    const createTopicAPIPathMock = fetchMock.postOnce(
-      createTopicAPIPath,
-      createTopicResponsePayload,
-      {
-        body: createTopicPayload,
-      }
+    renderComponent(clusterTopicNewPath(clusterName));
+    await userEvent.type(screen.getByPlaceholderText('Topic Name'), topicName);
+    await userEvent.type(
+      screen.getByLabelText('Number of Partitions *'),
+      minValue
     );
-    const mockedHistory = createMemoryHistory({
-      initialEntries: [clusterTopicNewPath(clusterName)],
-    });
-    jest.spyOn(mockedHistory, 'push');
-    renderComponent(mockedHistory);
-
-    await waitFor(() => {
-      userEvent.type(screen.getByPlaceholderText('Topic Name'), topicName);
-      userEvent.click(screen.getByText(/submit/i));
-    });
-
-    await waitFor(() =>
-      expect(mockedHistory.location.pathname).toBe(
-        clusterTopicPath(clusterName, topicName)
-      )
-    );
-    expect(mockedHistory.push).toBeCalledTimes(1);
-    expect(createTopicAPIPathMock.called()).toBeTruthy();
+    await userEvent.click(screen.getByText('Create topic'));
+    expect(createTopicMock).toHaveBeenCalledTimes(1);
+    expect(mockNavigate).toHaveBeenLastCalledWith(`../${topicName}`);
   });
 });

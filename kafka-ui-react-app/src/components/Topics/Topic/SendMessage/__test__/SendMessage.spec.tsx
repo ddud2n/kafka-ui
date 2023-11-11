@@ -1,25 +1,16 @@
 import React from 'react';
 import SendMessage from 'components/Topics/Topic/SendMessage/SendMessage';
-import {
-  screen,
-  waitFor,
-  waitForElementToBeRemoved,
-} from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import fetchMock from 'fetch-mock';
-import { createMemoryHistory } from 'history';
-import { render } from 'lib/testHelpers';
-import { Route, Router } from 'react-router';
-import {
-  clusterTopicMessagesPath,
-  clusterTopicSendMessagePath,
-} from 'lib/paths';
-import { store } from 'redux/store';
-import { fetchTopicDetailsAction } from 'redux/actions';
-import { initialState } from 'redux/reducers/topics/reducer';
-import { externalTopicPayload } from 'redux/reducers/topics/__test__/fixtures';
+import { render, WithRoute } from 'lib/testHelpers';
+import { clusterTopicPath } from 'lib/paths';
+import { validateBySchema } from 'components/Topics/Topic/SendMessage/utils';
+import { externalTopicPayload } from 'lib/fixtures/topics';
+import { useSendMessage, useTopicDetails } from 'lib/hooks/api/topics';
+import { useSerdes } from 'lib/hooks/api/topicMessages';
+import { serdesPayload } from 'lib/fixtures/topicMessages';
 
-import { testSchema } from './fixtures';
+import Mock = jest.Mock;
 
 jest.mock('json-schema-faker', () => ({
   generate: () => ({
@@ -30,69 +21,90 @@ jest.mock('json-schema-faker', () => ({
   option: jest.fn(),
 }));
 
+jest.mock('components/Topics/Topic/SendMessage/utils', () => ({
+  ...jest.requireActual('components/Topics/Topic/SendMessage/utils'),
+  validateBySchema: jest.fn(),
+}));
+
+jest.mock('lib/errorHandling', () => ({
+  ...jest.requireActual('lib/errorHandling'),
+  showServerError: jest.fn(),
+}));
+
+jest.mock('lib/hooks/api/topics', () => ({
+  useTopicDetails: jest.fn(),
+  useSendMessage: jest.fn(),
+}));
+
+jest.mock('lib/hooks/api/topicMessages', () => ({
+  useSerdes: jest.fn(),
+}));
+
 const clusterName = 'testCluster';
 const topicName = externalTopicPayload.name;
-const history = createMemoryHistory();
 
-const renderComponent = () => {
-  history.push(clusterTopicSendMessagePath(clusterName, topicName));
-  render(
-    <Router history={history}>
-      <Route path={clusterTopicSendMessagePath(':clusterName', ':topicName')}>
-        <SendMessage />
-      </Route>
-    </Router>,
-    { store }
+const mockOnSubmit = jest.fn();
+
+const renderComponent = async () => {
+  const path = clusterTopicPath(clusterName, topicName);
+  await render(
+    <WithRoute path={clusterTopicPath()}>
+      <SendMessage closeSidebar={mockOnSubmit} />
+    </WithRoute>,
+    { initialEntries: [path] }
   );
 };
 
-describe('SendMessage', () => {
-  beforeAll(() => {
-    store.dispatch(
-      fetchTopicDetailsAction.success({
-        ...initialState,
-        byName: {
-          [externalTopicPayload.name]: externalTopicPayload,
-        },
-      })
-    );
-  });
-  afterEach(() => {
-    fetchMock.reset();
-  });
+const renderAndSubmitData = async (error: string[] = []) => {
+  await renderComponent();
+  await userEvent.click(screen.getAllByRole('listbox')[0]);
 
-  it('fetches schema on first render', () => {
-    const fetchTopicMessageSchemaMock = fetchMock.getOnce(
-      `/api/clusters/${clusterName}/topics/${topicName}/messages/schema`,
-      testSchema
-    );
-    renderComponent();
-    expect(fetchTopicMessageSchemaMock.called()).toBeTruthy();
+  await userEvent.click(screen.getAllByRole('option')[1]);
+
+  (validateBySchema as Mock).mockImplementation(() => error);
+  const submitButton = screen.getByRole('button', {
+    name: 'Produce Message',
+  });
+  await waitFor(() => expect(submitButton).toBeEnabled());
+  await userEvent.click(submitButton);
+};
+
+describe('SendMessage', () => {
+  beforeEach(() => {
+    (useTopicDetails as jest.Mock).mockImplementation(() => ({
+      data: externalTopicPayload,
+    }));
+    (useSerdes as jest.Mock).mockImplementation(() => ({
+      data: serdesPayload,
+    }));
   });
 
   describe('when schema is fetched', () => {
-    beforeEach(() => {
-      fetchMock.getOnce(
-        `/api/clusters/${clusterName}/topics/${topicName}/messages/schema`,
-        testSchema
-      );
+    it('calls sendTopicMessage on submit', async () => {
+      const sendTopicMessageMock = jest.fn();
+      (useSendMessage as jest.Mock).mockImplementation(() => ({
+        mutateAsync: sendTopicMessageMock,
+      }));
+      await renderAndSubmitData();
+      expect(sendTopicMessageMock).toHaveBeenCalledTimes(1);
+      expect(mockOnSubmit).toHaveBeenCalledTimes(1);
     });
 
-    it('calls sendTopicMessage on submit', async () => {
-      const sendTopicMessageMock = fetchMock.postOnce(
-        `/api/clusters/${clusterName}/topics/${topicName}/messages`,
-        200
-      );
-      renderComponent();
-      await waitForElementToBeRemoved(() => screen.getByRole('progressbar'));
+    it('should check and view validation error message when is not valid', async () => {
+      const sendTopicMessageMock = jest.fn();
+      (useSendMessage as jest.Mock).mockImplementation(() => ({
+        mutateAsync: sendTopicMessageMock,
+      }));
+      await renderAndSubmitData(['error']);
+      expect(sendTopicMessageMock).not.toHaveBeenCalled();
+      expect(mockOnSubmit).not.toHaveBeenCalled();
+    });
+  });
 
-      userEvent.selectOptions(screen.getByLabelText('Partition'), '0');
-      await screen.findByText('Send');
-      userEvent.click(screen.getByText('Send'));
-      await waitFor(() => expect(sendTopicMessageMock.called()).toBeTruthy());
-      expect(history.location.pathname).toEqual(
-        clusterTopicMessagesPath(clusterName, topicName)
-      );
+  describe('when schema is empty', () => {
+    it('renders if schema is not defined', async () => {
+      await renderComponent();
+      expect(screen.getAllByRole('textbox')[0].nodeValue).toBeNull();
     });
   });
 });

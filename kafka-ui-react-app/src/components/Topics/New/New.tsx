@@ -1,41 +1,33 @@
 import React from 'react';
-import { ClusterName, TopicFormData, FailurePayload } from 'redux/interfaces';
-import { useForm, FormProvider } from 'react-hook-form';
-import { clusterTopicPath } from 'lib/paths';
+import { TopicFormData } from 'redux/interfaces';
+import { FormProvider, useForm } from 'react-hook-form';
+import { ClusterNameRoute, clusterTopicsPath } from 'lib/paths';
 import TopicForm from 'components/Topics/shared/Form/TopicForm';
-import {
-  formatTopicCreation,
-  topicsApiClient,
-  createTopicAction,
-} from 'redux/actions';
-import { useDispatch } from 'react-redux';
-import { getResponse } from 'lib/errorHandling';
-import { useHistory, useLocation, useParams } from 'react-router';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { yupResolver } from '@hookform/resolvers/yup';
 import { topicFormValidationSchema } from 'lib/yupExtended';
 import PageHeading from 'components/common/PageHeading/PageHeading';
-
-interface RouterParams {
-  clusterName: ClusterName;
-}
+import useAppParams from 'lib/hooks/useAppParams';
+import { useCreateTopic } from 'lib/hooks/api/topics';
 
 enum Filters {
   NAME = 'name',
   PARTITION_COUNT = 'partitionCount',
   REPLICATION_FACTOR = 'replicationFactor',
   INSYNC_REPLICAS = 'inSyncReplicas',
-  CLEANUP_POLICY = 'Delete',
+  CLEANUP_POLICY = 'cleanUpPolicy',
 }
 
 const New: React.FC = () => {
+  const { clusterName } = useAppParams<ClusterNameRoute>();
   const methods = useForm<TopicFormData>({
-    mode: 'all',
+    mode: 'onChange',
     resolver: yupResolver(topicFormValidationSchema),
   });
 
-  const { clusterName } = useParams<RouterParams>();
-  const history = useHistory();
-  const dispatch = useDispatch();
+  const createTopic = useCreateTopic(clusterName);
+
+  const navigate = useNavigate();
 
   const { search } = useLocation();
   const params = new URLSearchParams(search);
@@ -48,26 +40,20 @@ const New: React.FC = () => {
 
   const onSubmit = async (data: TopicFormData) => {
     try {
-      await topicsApiClient.createTopic({
-        clusterName,
-        topicCreation: formatTopicCreation(data),
-      });
-      history.push(clusterTopicPath(clusterName, data.name));
-    } catch (error) {
-      const response = await getResponse(error as Response);
-      const alert: FailurePayload = {
-        subject: ['schema', data.name].join('-'),
-        title: `${response.message}`,
-        response,
-      };
-
-      dispatch(createTopicAction.failure({ alert }));
+      await createTopic.createResource(data);
+      navigate(`../${data.name}`);
+    } catch (e) {
+      // do nothing
     }
   };
 
   return (
     <>
-      <PageHeading text={search ? 'Copy Topic' : 'Create new Topic'} />
+      <PageHeading
+        text={search ? 'Copy' : 'Create'}
+        backText="Topics"
+        backTo={clusterTopicsPath(clusterName)}
+      />
       <FormProvider {...methods}>
         <TopicForm
           topicName={name}
@@ -75,7 +61,7 @@ const New: React.FC = () => {
           partitionCount={Number(partitionCount)}
           replicationFactor={Number(replicationFactor)}
           inSyncReplicas={Number(inSyncReplicas)}
-          isSubmitting={methods.formState.isSubmitting}
+          isSubmitting={createTopic.isLoading}
           onSubmit={methods.handleSubmit(onSubmit)}
         />
       </FormProvider>

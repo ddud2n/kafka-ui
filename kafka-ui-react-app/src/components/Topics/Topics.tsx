@@ -1,39 +1,31 @@
 import React from 'react';
-import { Switch } from 'react-router-dom';
+import { Route, Routes } from 'react-router-dom';
 import {
-  clusterTopicCopyPath,
-  clusterTopicNewPath,
-  clusterTopicPath,
-  clusterTopicsPath,
+  clusterTopicCopyRelativePath,
+  clusterTopicNewRelativePath,
+  getNonExactPath,
+  RouteParams,
 } from 'lib/paths';
-import { BreadcrumbRoute } from 'components/common/Breadcrumb/Breadcrumb.route';
+import SuspenseQueryComponent from 'components/common/SuspenseQueryComponent/SuspenseQueryComponent';
 
-import ListContainer from './List/ListContainer';
-import TopicContainer from './Topic/TopicContainer';
 import New from './New/New';
+import ListPage from './List/ListPage';
+import Topic from './Topic/Topic';
 
 const Topics: React.FC = () => (
-  <Switch>
-    <BreadcrumbRoute
-      exact
-      path={clusterTopicsPath(':clusterName')}
-      component={ListContainer}
+  <Routes>
+    <Route index element={<ListPage />} />
+    <Route path={clusterTopicNewRelativePath} element={<New />} />
+    <Route path={clusterTopicCopyRelativePath} element={<New />} />
+    <Route
+      path={getNonExactPath(RouteParams.topicName)}
+      element={
+        <SuspenseQueryComponent>
+          <Topic />
+        </SuspenseQueryComponent>
+      }
     />
-    <BreadcrumbRoute
-      exact
-      path={clusterTopicNewPath(':clusterName')}
-      component={New}
-    />
-    <BreadcrumbRoute
-      exact
-      path={clusterTopicCopyPath(':clusterName')}
-      component={New}
-    />
-    <BreadcrumbRoute
-      path={clusterTopicPath(':clusterName', ':topicName')}
-      component={TopicContainer}
-    />
-  </Switch>
+  </Routes>
 );
 
 export default Topics;
